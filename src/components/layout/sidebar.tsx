@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, PieChart, TrendingUp, BarChart3,
   ShieldCheck, Bell, Star, Upload, Target, Zap,
-  Activity, BookOpen, LogOut,
+  Activity, BookOpen, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,23 +42,23 @@ export function Sidebar() {
   const router = useRouter();
 
   return (
-    <aside className="hidden lg:flex h-full w-56 flex-col border-r bg-card">
+    <aside className="hidden lg:flex h-full w-60 flex-col bg-card border-r border-border">
       {/* Logo */}
-      <div className="flex h-14 items-center gap-2.5 border-b px-5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
-          <TrendingUp className="h-4 w-4 text-primary-foreground" />
+      <div className="flex h-16 items-center gap-3 px-5 border-b border-border">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-sm shadow-primary/30">
+          <TrendingUp className="h-5 w-5 text-white" />
         </div>
         <div>
-          <p className="text-sm font-bold leading-none">EquityLens</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Portfolio Intel</p>
+          <p className="text-base font-bold leading-none tracking-tight">EquityLens</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Portfolio Intelligence</p>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
+      <nav className="flex-1 overflow-y-auto py-5 px-3 space-y-6">
         {navGroups.map((group) => (
           <div key={group.label}>
-            <p className="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
               {group.label}
             </p>
             <div className="space-y-0.5">
@@ -69,14 +69,17 @@ export function Sidebar() {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                      "flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
                       isActive
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                        ? "bg-primary text-white shadow-sm shadow-primary/20"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     )}
                   >
-                    <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "")} />
-                    {item.label}
+                    <div className="flex items-center gap-3">
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {item.label}
+                    </div>
+                    {isActive && <ChevronRight className="h-3.5 w-3.5 opacity-70" />}
                   </Link>
                 );
               })}
@@ -86,20 +89,13 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t p-3 space-y-0.5">
-        <Link
-          href="/dashboard/import"
-          className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      <div className="border-t border-border p-3">
+        <button
+          onClick={() => router.push("/dashboard/import")}
+          className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-all duration-150"
         >
           <Upload className="h-4 w-4" />
           Import Data
-        </Link>
-        <button
-          onClick={() => router.push("/")}
-          className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-        >
-          <LogOut className="h-4 w-4" />
-          Home
         </button>
       </div>
     </aside>
