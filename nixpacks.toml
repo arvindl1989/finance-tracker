@@ -7,8 +7,9 @@ cmds = ["npm ci"]
 [phases.build]
 cmds = [
   "npx prisma generate",
-  "npm run build"
+  "npm run build",
+  "chmod +x start.sh"
 ]
 
 [start]
-cmd = "npx prisma db push --accept-data-loss && npm start"
+cmd = "sh start.sh"
