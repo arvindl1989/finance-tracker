@@ -79,9 +79,21 @@ export function usePortfolio() {
   useEffect(() => {
     fetch("/api/portfolio")
       .then((r) => r.json())
-      .then((d) => { setData(d); setLoading(false); })
+      .then((d) => {
+        if (d?.error) { setError(d.error); setLoading(false); return; }
+        setData(d);
+        setLoading(false);
+      })
       .catch((e) => { setError(e.message); setLoading(false); });
   }, []);
 
-  return { data, loading, error, refresh: () => { setLoading(true); fetch("/api/portfolio").then((r) => r.json()).then((d) => { setData(d); setLoading(false); }); } };
+  const refresh = () => {
+    setLoading(true);
+    fetch("/api/portfolio")
+      .then((r) => r.json())
+      .then((d) => { if (!d?.error) setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+
+  return { data, loading, error, refresh };
 }

@@ -18,7 +18,12 @@ export default function DashboardPage() {
   const { data, loading } = usePortfolio();
 
   if (loading) return <div className="flex h-full items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
-  if (!data) return <div className="text-center text-muted-foreground">No data available</div>;
+  if (error || !data) return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+      <p className="text-red-500 font-medium">Could not load portfolio data</p>
+      <p className="text-xs text-muted-foreground max-w-sm">{error ?? "No data returned from API. Check that DATABASE_URL is set in Railway environment variables and the database is seeded."}</p>
+    </div>
+  );
 
   const { summary, holdings, snapshots } = data;
   const chartData = snapshots.map((s) => ({
