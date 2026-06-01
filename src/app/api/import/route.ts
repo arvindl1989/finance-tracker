@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma, dbMissing } from "@/lib/db";
 
 const PORTFOLIO_ID = "demo-portfolio";
 
@@ -21,6 +21,8 @@ function pick(row: Record<string, unknown>, ...keys: string[]): unknown {
 }
 
 export async function POST(req: NextRequest) {
+  if (dbMissing() || !prisma)
+    return NextResponse.json({ error: "DATABASE_URL not set. Go to Railway → your project → New → Database → PostgreSQL, then redeploy." }, { status: 503 });
   try {
     const body = await req.json();
     const { holdings } = body as { holdings: Record<string, unknown>[] };

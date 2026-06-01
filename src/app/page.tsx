@@ -44,6 +44,7 @@ export default function Home() {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
       setResult(data);
       setStatus("done");
       setTimeout(() => router.push("/dashboard"), 1800);

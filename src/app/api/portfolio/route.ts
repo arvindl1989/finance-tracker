@@ -1,24 +1,21 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma, dbMissing } from "@/lib/db";
 
 const DEMO_PORTFOLIO_ID = "demo-portfolio";
 
 export async function GET() {
+  if (dbMissing() || !prisma) {
+    return NextResponse.json({ error: "DATABASE_URL not configured. Add a PostgreSQL database in Railway and set DATABASE_URL." }, { status: 503 });
+  }
   try {
     const holdings = await prisma.holding.findMany({
       where: { portfolioId: DEMO_PORTFOLIO_ID },
       orderBy: { currentValue: "desc" },
     });
 
-    const portfolio = await prisma.portfolio.findUnique({
-      where: { id: DEMO_PORTFOLIO_ID },
-    });
-
-    const totalValue = holdings.reduce((sum, h) => sum + Number(h.currentValue), 0);
-    const totalCost = holdings.reduce((sum, h) => sum + Number(h.totalCost), 0);
-    const totalGainLoss = totalValue - totalCost;
-    const totalGainLossPercent = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0;
-    const totalDividend = holdings.reduce((sum, h) => sum + Number(h.dividendReceived), 0);
+    const totalValue = holdings.reduce((s, h) => s + Number(h.currentValue), 0);
+    const totalCost  = holdings.reduce((s, h) => s + Number(h.totalCost), 0);
+    const totalDividend = holdings.reduce((s, h) => s + Number(h.dividendReceived), 0);
 
     const snapshots = await prisma.portfolioSnapshot.findMany({
       where: { portfolioId: DEMO_PORTFOLIO_ID },
@@ -27,7 +24,6 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      portfolio,
       holdings: holdings.map((h) => ({
         ...h,
         quantity: Number(h.quantity),
@@ -38,7 +34,7 @@ export async function GET() {
         absoluteGainLoss: Number(h.absoluteGainLoss),
         gainLossPercent: Number(h.gainLossPercent),
         dividendReceived: Number(h.dividendReceived),
-        portfolioWeightPercent: Number(h.portfolioWeightPercent),
+        portfolioWeightPercent: Number(h.portfolioWeightPercent ?? 0),
         targetWeightPercent: h.targetWeightPercent ? Number(h.targetWeightPercent) : null,
         currentPE: h.currentPE ? Number(h.currentPE) : null,
         historicalAveragePE: h.historicalAveragePE ? Number(h.historicalAveragePE) : null,
@@ -63,7 +59,13 @@ export async function GET() {
         sellScore: h.sellScore ? Number(h.sellScore) : null,
         concentrationRiskScore: h.concentrationRiskScore ? Number(h.concentrationRiskScore) : null,
       })),
-      summary: { totalValue, totalCost, totalGainLoss, totalGainLossPercent, totalDividend },
+      summary: {
+        totalValue,
+        totalCost,
+        totalGainLoss: totalValue - totalCost,
+        totalGainLossPercent: totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
+        totalDividend,
+      },
       snapshots: snapshots.map((s) => ({
         date: s.snapshotDate,
         value: Number(s.totalValue),
@@ -71,8 +73,8 @@ export async function GET() {
         gainLoss: Number(s.gainLoss),
       })),
     });
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Failed to fetch portfolio" }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
