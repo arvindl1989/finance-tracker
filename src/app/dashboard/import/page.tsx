@@ -1,166 +1,186 @@
 "use client";
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, CheckCircle, AlertCircle, Download } from "lucide-react";
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Download, ArrowRight } from "lucide-react";
 
-const SAMPLE_CSV = `StockCode,CompanyName,Industry,Quantity,AverageBuyPrice,CurrentPrice
-RELIANCE,Reliance Industries,Energy,100,2200,2850
-TCS,Tata Consultancy Services,Technology,50,3100,4180
-HDFCBANK,HDFC Bank,Banking & Finance,200,1450,1620`;
-
-const COLUMN_MAP: Record<string, string> = {
-  stockcode: "stockCode", "stock code": "stockCode", symbol: "stockCode", ticker: "stockCode",
-  companyname: "companyName", "company name": "companyName", company: "companyName",
-  industry: "industry", sector: "industry",
-  quantity: "quantity", qty: "quantity", shares: "quantity",
-  averagebuyprice: "averageBuyPrice", "avg price": "averageBuyPrice", "average price": "averageBuyPrice", buyprice: "averageBuyPrice",
-  currentprice: "currentPrice", "current price": "currentPrice", ltp: "currentPrice", price: "currentPrice",
-};
-
-function normalizeRow(row: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(row)) {
-    const normalized = k.toLowerCase().trim();
-    const mapped = COLUMN_MAP[normalized] ?? normalized;
-    out[mapped] = v;
-  }
-  return out;
-}
+const SAMPLE_CSV = `StockCode,CompanyName,Industry,Quantity,AverageBuyPrice,CurrentPrice,CurrentPE,HistoricalAveragePE,EPS,BookValuePerShare,ROEPercent,ROCEPercent,DebtToEquityRatio,Week52High,Week52Low,AllTimeHigh
+RELIANCE,Reliance Industries Ltd,Energy,100,2200,2847,28.9,22,98.5,1218,14.2,12.8,0.42,3024,2180,3024
+TCS,Tata Consultancy Services,Technology,50,3100,4182,32.5,28,128.7,485,52.1,68.4,0.01,4300,3204,4300
+HDFCBANK,HDFC Bank Ltd,Banking & Finance,200,1450,1618,19.2,22.5,84.2,582,16.8,18.2,8.2,1757,1363,1757`;
 
 export default function ImportPage() {
+  const router = useRouter();
   const [dragging, setDragging] = useState(false);
-  const [preview, setPreview] = useState<Record<string, string>[]>([]);
-  const [fileName, setFileName] = useState("");
-  const [status, setStatus] = useState<"idle" | "preview" | "importing" | "done" | "error">("idle");
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<Record<string, unknown>[]>([]);
+  const [status, setStatus] = useState<"idle" | "parsing" | "preview" | "uploading" | "done" | "error">("idle");
   const [result, setResult] = useState<{ created: number; updated: number; errors: string[] } | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const processFile = (file: File) => {
-    setFileName(file.name);
-    const ext = file.name.split(".").pop()?.toLowerCase();
+  const parseFile = useCallback(async (f: File) => {
+    setFile(f);
+    setStatus("parsing");
+    setErrorMsg("");
+    try {
+      const ext = f.name.split(".").pop()?.toLowerCase();
+      let rows: Record<string, unknown>[] = [];
 
-    if (ext === "csv") {
-      Papa.parse(file, {
-        header: true, skipEmptyLines: true,
-        complete: (results) => {
-          const rows = (results.data as Record<string, string>[]).map(normalizeRow);
-          setPreview(rows.slice(0, 10));
-          setStatus("preview");
-        },
-      });
-    } else if (ext === "xlsx" || ext === "xls") {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const wb = XLSX.read(e.target?.result, { type: "array" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws).map(normalizeRow);
-        setPreview(rows.slice(0, 10));
-        setStatus("preview");
-      };
-      reader.readAsArrayBuffer(file);
+      if (ext === "csv") {
+        const Papa = (await import("papaparse")).default;
+        const text = await f.text();
+        const parsed = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true });
+        rows = parsed.data;
+      } else {
+        const XLSX = await import("xlsx");
+        const buffer = await f.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: "array" });
+        // prefer "Import Ready" sheet if present, else first sheet
+        const sheetName = wb.SheetNames.includes("Import Ready") ? "Import Ready" : wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+      }
+
+      if (!rows.length) { setStatus("error"); setErrorMsg("No rows found. Check the file has a header row."); return; }
+      setPreview(rows.slice(0, 6));
+      setStatus("preview");
+    } catch (e: unknown) {
+      setStatus("error");
+      setErrorMsg(e instanceof Error ? e.message : "Could not read file");
     }
-  };
-
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) processFile(file);
   }, []);
 
-  const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) processFile(file);
-  };
-
   const handleImport = async () => {
-    setStatus("importing");
+    setStatus("uploading");
     try {
+      const ext = file!.name.split(".").pop()?.toLowerCase();
+      let allRows: Record<string, unknown>[] = [];
+
+      if (ext === "csv") {
+        const Papa = (await import("papaparse")).default;
+        const text = await file!.text();
+        allRows = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true }).data;
+      } else {
+        const XLSX = await import("xlsx");
+        const buffer = await file!.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: "array" });
+        const sheetName = wb.SheetNames.includes("Import Ready") ? "Import Ready" : wb.SheetNames[0];
+        allRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName]);
+      }
+
       const res = await fetch("/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ holdings: preview }),
+        body: JSON.stringify({ holdings: allRows }),
       });
       const data = await res.json();
+      if (data.error) throw new Error(data.error);
       setResult(data);
       setStatus("done");
-    } catch {
+    } catch (e: unknown) {
       setStatus("error");
+      setErrorMsg(e instanceof Error ? e.message : "Upload failed");
     }
   };
 
-  const downloadSample = () => {
-    const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "sample-portfolio.csv";
-    a.click();
-  };
+  const reset = () => { setStatus("idle"); setFile(null); setPreview([]); setResult(null); setErrorMsg(""); };
+  const onDrop = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) parseFile(f); }, [parseFile]);
+  const downloadSample = () => { const b = new Blob([SAMPLE_CSV], { type: "text/csv" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "sample-portfolio.csv"; a.click(); };
+
+  const cols = preview[0] ? Object.keys(preview[0]).slice(0, 7) : [];
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Import Portfolio</h1>
-        <p className="text-muted-foreground text-sm">Upload Excel or CSV with your holdings data</p>
+        <h1 className="text-xl font-bold">Import Portfolio</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Upload an Excel (.xlsx) or CSV file to load your holdings</p>
       </div>
 
-      {/* Sample download */}
-      <Card>
-        <CardContent className="p-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">Download Sample Template</p>
-            <p className="text-xs text-muted-foreground">Use this format: StockCode, CompanyName, Industry, Quantity, AverageBuyPrice, CurrentPrice</p>
+      {/* Done state */}
+      {status === "done" && result && (
+        <Card className="border-green-500/30 bg-green-500/5">
+          <CardContent className="p-6 text-center space-y-3">
+            <CheckCircle className="h-10 w-10 text-green-500 mx-auto" />
+            <p className="font-semibold">Import complete</p>
+            <p className="text-sm text-muted-foreground">{result.created} stocks added · {result.updated} updated</p>
+            <div className="flex gap-3 justify-center pt-2">
+              <Button onClick={() => router.push("/dashboard")}>
+                Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button variant="outline" onClick={reset}>Import another</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Upload zone */}
+      {(status === "idle" || status === "error") && (
+        <>
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            onClick={() => document.getElementById("fi")?.click()}
+            className={`rounded-xl border-2 border-dashed p-12 text-center cursor-pointer transition-all select-none
+              ${dragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-muted/20"}`}
+          >
+            <input id="fi" type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) parseFile(f); }} />
+            <Upload className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+            <p className="font-medium text-sm">Drop your file here or click to browse</p>
+            <p className="text-xs text-muted-foreground mt-1">.xlsx · .xls · .csv</p>
+            {status === "error" && <p className="mt-3 text-xs text-red-500">{errorMsg}</p>}
           </div>
-          <Button variant="outline" size="sm" onClick={downloadSample}>
-            <Download className="h-4 w-4 mr-2" />
-            Sample CSV
-          </Button>
-        </CardContent>
-      </Card>
 
-      {/* Drop zone */}
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors cursor-pointer ${dragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
-        onClick={() => document.getElementById("file-input")?.click()}
-      >
-        <input id="file-input" type="file" accept=".csv,.xlsx,.xls" onChange={onFileSelect} className="hidden" />
-        <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-        <p className="text-sm font-medium">Drop your CSV or Excel file here</p>
-        <p className="text-xs text-muted-foreground mt-1">Supports .csv, .xlsx, .xls</p>
-        {fileName && <Badge variant="secondary" className="mt-3">{fileName}</Badge>}
-      </div>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Need a template?</p>
+            <Button variant="outline" size="sm" onClick={downloadSample}>
+              <Download className="h-3.5 w-3.5 mr-2" /> Download sample CSV
+            </Button>
+          </div>
+        </>
+      )}
+
+      {/* Parsing spinner */}
+      {status === "parsing" && (
+        <div className="rounded-xl border p-10 text-center space-y-3">
+          <div className="h-8 w-8 mx-auto rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-sm text-muted-foreground">Reading {file?.name}…</p>
+        </div>
+      )}
 
       {/* Preview */}
       {status === "preview" && preview.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center justify-between">
-              <span>Preview ({preview.length} rows detected)</span>
-              <Button size="sm" onClick={handleImport}>Import Now</Button>
-            </CardTitle>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <FileSpreadsheet className="h-4 w-4" />
+                Preview — {preview.length} rows shown
+                {file && <span className="text-muted-foreground font-normal">({file.name})</span>}
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={reset}>Cancel</Button>
+                <Button size="sm" onClick={handleImport}>Import All</Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b">
-                    {Object.keys(preview[0]).slice(0, 8).map((k) => (
-                      <th key={k} className="pb-2 text-left font-medium text-muted-foreground pr-4">{k}</th>
+                <thead className="bg-muted">
+                  <tr>
+                    {cols.map((k) => (
+                      <th key={k} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{k}</th>
                     ))}
+                    {Object.keys(preview[0]).length > 7 && <th className="px-3 py-2 text-muted-foreground">+{Object.keys(preview[0]).length - 7} more</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {preview.slice(0, 5).map((row, i) => (
-                    <tr key={i}>
-                      {Object.values(row).slice(0, 8).map((v, j) => (
-                        <td key={j} className="py-1.5 pr-4">{String(v)}</td>
+                  {preview.map((row, i) => (
+                    <tr key={i} className="hover:bg-muted/30">
+                      {cols.map((k) => (
+                        <td key={k} className="px-3 py-2 whitespace-nowrap max-w-[140px] truncate">{String(row[k] ?? "")}</td>
                       ))}
                     </tr>
                   ))}
@@ -171,66 +191,40 @@ export default function ImportPage() {
         </Card>
       )}
 
-      {status === "importing" && (
-        <div className="flex items-center gap-3 rounded-lg border p-4">
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
-          <p className="text-sm">Importing holdings…</p>
+      {/* Uploading */}
+      {status === "uploading" && (
+        <div className="rounded-xl border p-10 text-center space-y-3">
+          <div className="h-8 w-8 mx-auto rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-sm text-muted-foreground">Saving to database…</p>
         </div>
       )}
 
-      {status === "done" && result && (
-        <Card className="border-green-500/30 bg-green-500/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="h-5 w-5 text-green-500" />
-              <p className="text-sm font-semibold text-green-500">Import Complete</p>
+      {/* Column guide */}
+      {(status === "idle" || status === "error") && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs text-muted-foreground uppercase tracking-wide">Recognised column names</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <p className="text-xs font-medium mb-1.5">Required</p>
+              <div className="flex flex-wrap gap-1.5">
+                {["StockCode","CompanyName","Quantity","AverageBuyPrice","CurrentPrice"].map((c) => (
+                  <code key={c} className="rounded border bg-muted px-2 py-0.5 text-xs font-mono">{c}</code>
+                ))}
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">Created: {result.created} | Updated: {result.updated}</p>
-            {result.errors.length > 0 && (
-              <div className="mt-2">
-                <p className="text-xs text-red-500">Errors: {result.errors.length}</p>
+            <div>
+              <p className="text-xs font-medium mb-1.5">Optional (enables full scoring)</p>
+              <div className="flex flex-wrap gap-1.5">
+                {["Industry","CurrentPE","HistoricalAveragePE","EPS","BookValuePerShare","ROEPercent","ROCEPercent","DebtToEquityRatio","RevenueGrowthPercent","EPSGrowthPercent","Week52High","Week52Low","AllTimeHigh","DividendReceived","TargetWeightPercent"].map((c) => (
+                  <code key={c} className="rounded border bg-muted px-2 py-0.5 text-[10px] font-mono text-muted-foreground">{c}</code>
+                ))}
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
       )}
-
-      {status === "error" && (
-        <Card className="border-red-500/30 bg-red-500/5">
-          <CardContent className="p-4 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <p className="text-sm text-red-500">Import failed. Please check your file format.</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Supported columns */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Supported Column Names</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {[
-              ["StockCode / Symbol / Ticker", "Stock identifier"],
-              ["CompanyName / Company", "Full company name"],
-              ["Industry / Sector", "Business sector"],
-              ["Quantity / Qty / Shares", "Number of shares"],
-              ["AverageBuyPrice / AvgPrice", "Your purchase price"],
-              ["CurrentPrice / LTP / Price", "Current market price"],
-              ["CurrentPE / PE", "Current P/E ratio"],
-              ["EPS", "Earnings per share"],
-              ["BookValuePerShare / BVPS", "Book value per share"],
-              ["ROE / ROCE", "Return ratios"],
-            ].map(([col, desc]) => (
-              <div key={col} className="space-y-0.5">
-                <p className="font-mono font-medium">{col}</p>
-                <p className="text-muted-foreground">{desc}</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

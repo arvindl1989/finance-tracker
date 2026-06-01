@@ -10,18 +10,15 @@ import {
 
 const COLORS = ["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#10b981","#06b6d4","#f97316","#84cc16","#6366f1","#14b8a6","#e11d48","#7c3aed"];
 
-interface TreemapContentProps {
-  x?: number; y?: number; width?: number; height?: number;
-  name?: string; value?: number; depth?: number;
-}
-
-const CustomTreemapContent = ({ x = 0, y = 0, width = 0, height = 0, name, value }: TreemapContentProps) => {
-  if (width < 30 || height < 20) return null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomTreemapContent = (props: any) => {
+  const { x = 0, y = 0, width = 0, height = 0, name, value } = props;
+  if (width < 40 || height < 25) return null;
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} fill="hsl(var(--primary))" fillOpacity={0.2} stroke="hsl(var(--background))" strokeWidth={2} rx={4} />
-      <text x={x + width / 2} y={y + height / 2 - 6} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={11} fontWeight={600}>{name}</text>
-      <text x={x + width / 2} y={y + height / 2 + 10} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={10}>{value?.toFixed(1)}%</text>
+      <rect x={x} y={y} width={width} height={height} fill="hsl(var(--primary))" fillOpacity={0.15} stroke="hsl(var(--background))" strokeWidth={2} rx={4} />
+      <text x={x + width / 2} y={y + height / 2 - 5} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={11} fontWeight={600}>{name}</text>
+      <text x={x + width / 2} y={y + height / 2 + 10} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={10}>{typeof value === "number" ? `${value.toFixed(1)}%` : ""}</text>
     </g>
   );
 };
