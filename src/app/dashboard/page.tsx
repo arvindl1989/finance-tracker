@@ -15,7 +15,7 @@ import { formatCurrency, formatPercent, getProfitLossColor, getRecommendationCol
 import { format } from "date-fns";
 
 export default function DashboardPage() {
-  const { data, loading } = usePortfolio();
+  const { data, loading, error } = usePortfolio();
 
   if (loading) return <div className="flex h-full items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
   if (error || !data) return (
