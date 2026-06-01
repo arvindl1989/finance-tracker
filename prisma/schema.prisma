@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts   Account[]
+  sessions   Session[]
+  portfolios Portfolio[]
+  watchlists Watchlist[]
+  alerts     Alert[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Portfolio {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String   @default("My Portfolio")
+  description String?
+  currency    String   @default("INR")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  holdings Holding[]
+}
+
+model Holding {
+  id                  String   @id @default(cuid())
+  portfolioId         String
+  stockCode           String
+  companyName         String
+  industry            String?
+  subIndustry         String?
+  marketCapCategory   String?  // LargeCap | MidCap | SmallCap | MicroCap
+  exchange            String?  // NSE | BSE
+
+  // Purchase details
+  purchaseDate        DateTime?
+  quantity            Decimal  @db.Decimal(15, 4)
+  averageBuyPrice     Decimal  @db.Decimal(15, 4)
+  totalCost           Decimal  @db.Decimal(15, 2)
+
+  // Current market data
+  currentPrice        Decimal  @db.Decimal(15, 4)
+  currentValue        Decimal  @db.Decimal(15, 2)
+
+  // P&L
+  absoluteGainLoss    Decimal  @db.Decimal(15, 2)
+  gainLossPercent     Decimal  @db.Decimal(10, 4)
+  annualizedReturnXIRR Decimal? @db.Decimal(10, 4)
+
+  // Dividends
+  dividendReceived    Decimal  @db.Decimal(15, 2) @default(0)
+  dividendYieldPercent Decimal? @db.Decimal(10, 4)
+
+  // Allocation
+  portfolioWeightPercent  Decimal? @db.Decimal(10, 4)
+  targetWeightPercent     Decimal? @db.Decimal(10, 4)
+  allocationDifferencePercent Decimal? @db.Decimal(10, 4)
+
+  // Valuation - PE
+  currentPE              Decimal? @db.Decimal(10, 4)
+  historicalAveragePE    Decimal? @db.Decimal(10, 4)
+  peStatus               String?  // Cheap | Fair | Expensive
+
+  // Graham Number
+  eps                    Decimal? @db.Decimal(15, 4)
+  bookValuePerShare      Decimal? @db.Decimal(15, 4)
+  grahamNumber           Decimal? @db.Decimal(15, 4)
+  grahamPremiumDiscountPercent Decimal? @db.Decimal(10, 4)
+  marginOfSafetyPercent  Decimal? @db.Decimal(10, 4)
+
+  // Quality metrics
+  roePercent             Decimal? @db.Decimal(10, 4)
+  rocePercent            Decimal? @db.Decimal(10, 4)
+  debtToEquityRatio      Decimal? @db.Decimal(10, 4)
+  revenueGrowthPercent   Decimal? @db.Decimal(10, 4)
+  epsGrowthPercent       Decimal? @db.Decimal(10, 4)
+  qualityScore           Decimal? @db.Decimal(10, 2)
+
+  // 52 Week range
+  week52High             Decimal? @db.Decimal(15, 4)
+  week52Low              Decimal? @db.Decimal(15, 4)
+  distanceFrom52WHighPercent Decimal? @db.Decimal(10, 4)
+  distanceFrom52WLowPercent  Decimal? @db.Decimal(10, 4)
+
+  // 3 Year range
+  year3High              Decimal? @db.Decimal(15, 4)
+  year3Low               Decimal? @db.Decimal(15, 4)
+  distanceFrom3YHighPercent Decimal? @db.Decimal(10, 4)
+  distanceFrom3YLowPercent  Decimal? @db.Decimal(10, 4)
+
+  // 5 Year range
+  year5High              Decimal? @db.Decimal(15, 4)
+  year5Low               Decimal? @db.Decimal(15, 4)
+  distanceFrom5YHighPercent Decimal? @db.Decimal(10, 4)
+  distanceFrom5YLowPercent  Decimal? @db.Decimal(10, 4)
+
+  // ATH
+  allTimeHigh            Decimal? @db.Decimal(15, 4)
+  distanceFromATHPercent Decimal? @db.Decimal(10, 4)
+
+  // Rebalancing
+  currentAllocationPercent  Decimal? @db.Decimal(10, 4)
+  targetAllocationPercent   Decimal? @db.Decimal(10, 4)
+  excessOrShortfallValue    Decimal? @db.Decimal(15, 2)
+  suggestedSellAmount       Decimal? @db.Decimal(15, 2)
+  suggestedSellQuantity     Decimal? @db.Decimal(15, 4)
+  suggestedBuyAmount        Decimal? @db.Decimal(15, 2)
+  suggestedBuyQuantity      Decimal? @db.Decimal(15, 4)
+
+  // Signals
+  buyScore               Decimal? @db.Decimal(10, 2)
+  sellScore              Decimal? @db.Decimal(10, 2)
+  buySignal              Boolean  @default(false)
+  sellSignal             Boolean  @default(false)
+  recommendation         String?  // Strong Buy | Buy | Hold | Sell | Strong Sell
+
+  // Risk
+  concentrationRiskScore Decimal? @db.Decimal(10, 2)
+  sectorExposureScore    Decimal? @db.Decimal(10, 2)
+  volatilityScore        Decimal? @db.Decimal(10, 2)
+  riskRating             String?  // Low | Medium | High | Very High
+
+  // Meta
+  lastUpdatedDate        DateTime @default(now()) @updatedAt
+  investmentThesis       String?  @db.Text
+  notes                  String?  @db.Text
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  @@index([portfolioId])
+  @@index([stockCode])
+}
+
+model Watchlist {
+  id          String   @id @default(cuid())
+  userId      String
+  stockCode   String
+  companyName String
+  targetPrice Decimal? @db.Decimal(15, 4)
+  targetPE    Decimal? @db.Decimal(10, 4)
+  targetMOS   Decimal? @db.Decimal(10, 4)
+  notes       String?
+  addedAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Alert {
+  id          String   @id @default(cuid())
+  userId      String
+  stockCode   String
+  companyName String
+  alertType   String   // 52WH | 52WL | 3YH | 3YL | 5YH | 5YL | ATH | PE_HIGH | PE_LOW | ALLOCATION | MOS
+  severity    String   // Info | Warning | Critical
+  message     String
+  value       Decimal? @db.Decimal(15, 4)
+  threshold   Decimal? @db.Decimal(15, 4)
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+model PortfolioSnapshot {
+  id           String   @id @default(cuid())
+  portfolioId  String
+  snapshotDate DateTime
+  totalValue   Decimal  @db.Decimal(15, 2)
+  totalCost    Decimal  @db.Decimal(15, 2)
+  gainLoss     Decimal  @db.Decimal(15, 2)
+  createdAt    DateTime @default(now())
+
+  @@index([portfolioId, snapshotDate])
+}
