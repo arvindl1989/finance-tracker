@@ -11,4 +11,4 @@ cmds = [
 ]
 
 [start]
-cmd = "npx prisma db push --accept-data-loss && npx next start -p $PORT"
+cmd = "node scripts/start.mjs"
