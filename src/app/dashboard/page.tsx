@@ -3,9 +3,9 @@ import { useState } from "react";
 import { usePortfolio } from "@/hooks/use-portfolio";
 import { useLivePrices } from "@/hooks/use-live-prices";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Wallet, BarChart2, Gift, Zap, RefreshCw } from "lucide-react";
+import { TrendingUp, Zap } from "lucide-react";
+import { SyncButton } from "@/components/dashboard/sync-button";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -31,8 +31,6 @@ function KPI({ label, value, sub, trend, trendUp }: { label: string; value: stri
 
 export default function DashboardPage() {
   const { data, loading, error, refresh } = usePortfolio();
-  const [syncing, setSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState("");
 
   const stockCodes = data?.holdings?.map((h) => h.stockCode) ?? [];
   const { quotes, loading: pricesLoading, lastUpdated } = useLivePrices(stockCodes);
@@ -52,20 +50,6 @@ export default function DashboardPage() {
   const liveTotalGainLoss = liveTotalValue - totalCost;
   const liveTotalGainPct = totalCost > 0 ? (liveTotalGainLoss / totalCost) * 100 : 0;
 
-  const syncPrices = async () => {
-    setSyncing(true); setSyncMsg("");
-    try {
-      const res = await fetch("/api/sync", { method: "POST" });
-      const d = await res.json();
-      if (d.error) throw new Error(d.error);
-      setSyncMsg(`✓ ${d.updated} holdings updated`);
-      refresh();
-    } catch (e: unknown) {
-      setSyncMsg(`✗ ${e instanceof Error ? e.message : "Sync failed"}`);
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   if (loading) return (
     <div className="flex h-full items-center justify-center">
@@ -103,13 +87,7 @@ export default function DashboardPage() {
           )}
           {pricesLoading && <div className="h-3 w-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
         </div>
-        <div className="flex items-center gap-2">
-          {syncMsg && <span className="text-xs text-muted-foreground">{syncMsg}</span>}
-          <Button size="sm" variant="outline" onClick={syncPrices} disabled={syncing}>
-            <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", syncing && "animate-spin")} />
-            {syncing ? "Syncing…" : "Sync Prices"}
-          </Button>
-        </div>
+        <SyncButton stockCodes={stockCodes} onDone={refresh} />
       </div>
 
       {/* KPIs */}

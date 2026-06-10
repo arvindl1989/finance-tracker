@@ -26,10 +26,25 @@ export function useLivePrices(stockCodes: string[], refreshMs = 300000) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/prices?symbols=${stockCodes.join(",")}`);
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setQuotes(data);
+      const { fetchYahooQuotesBrowser } = await import("@/lib/yahoo-client");
+      const results = await fetchYahooQuotesBrowser(stockCodes);
+      const map: Record<string, LiveQuote> = {};
+      for (const q of results) {
+        map[q.stockCode] = {
+          symbol: q.stockCode,
+          price: q.price,
+          change: 0,
+          changePct: q.changePct,
+          week52High: q.week52High ?? 0,
+          week52Low: q.week52Low ?? 0,
+          pe: q.pe,
+          eps: q.eps,
+          bookValue: q.bookValue,
+          marketCap: null,
+          name: q.name,
+        };
+      }
+      setQuotes(map);
       setLastUpdated(new Date());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch prices");
