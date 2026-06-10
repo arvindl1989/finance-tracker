@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "DATABASE_URL not set. Go to Railway → your project → New → Database → PostgreSQL, then redeploy." }, { status: 503 });
   try {
     const body = await req.json();
-    const { holdings } = body as { holdings: Record<string, unknown>[] };
+    const { holdings, mode = "merge" } = body as { holdings: Record<string, unknown>[]; mode?: "merge" | "replace" };
     if (!Array.isArray(holdings) || !holdings.length)
       return NextResponse.json({ error: "No holdings data received" }, { status: 400 });
 
@@ -40,6 +40,12 @@ export async function POST(req: NextRequest) {
       update: {},
       create: { id: PORTFOLIO_ID, userId: user.id, name: "Growth & Quality Portfolio", currency: "INR" },
     });
+
+    // Replace mode: wipe all existing holdings + snapshots first
+    if (mode === "replace") {
+      await prisma.holding.deleteMany({ where: { portfolioId: PORTFOLIO_ID } });
+      await prisma.portfolioSnapshot.deleteMany({ where: { portfolioId: PORTFOLIO_ID } });
+    }
 
     let created = 0, updated = 0;
     const errors: string[] = [];
